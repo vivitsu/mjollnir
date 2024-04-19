@@ -37,6 +37,10 @@ enum Payload {
     EchoOk {
         echo: String,
     },
+    Generate,
+    GenerateOk {
+        id: String,
+    },
 }
 
 struct EchoNode {
@@ -76,6 +80,22 @@ impl EchoNode {
                 self.id += 1;
             }
             Payload::EchoOk { .. } => {}
+            Payload::Generate => {
+                let guid = format!("{}", self.id);
+                let reply = Message {
+                    src: input.dst,
+                    dst: input.src,
+                    body: Body {
+                        id: Some(self.id),
+                        in_reply_to: input.body.id,
+                        payload: Payload::GenerateOk { id: guid },
+                    },
+                };
+                serde_json::to_writer(&mut *output, &reply).context("respond to init")?;
+                output.write_all(b"\n").context("write trailing newline")?;
+                self.id += 1;
+            }
+            Payload::GenerateOk { .. } => todo!(),
         }
         Ok(())
     }
