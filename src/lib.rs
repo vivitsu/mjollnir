@@ -19,6 +19,24 @@ pub struct Body<Payload> {
     pub payload: Payload,
 }
 
+impl<Payload> Message<Payload> {
+    pub fn into_reply(self, id: Option<&mut usize>) -> Self {
+        Self {
+            src: self.dst,
+            dst: self.src,
+            body: Body {
+                id: id.map(|id| {
+                    let mid = *id;
+                    *id += 1;
+                    mid
+                }),
+                in_reply_to: self.body.id,
+                payload: self.body.payload,
+            },
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Init {
     pub node_id: String,
