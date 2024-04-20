@@ -43,14 +43,16 @@ enum Payload {
     },
 }
 
-struct EchoNode {
+struct Node {
     id: usize,
+    node_id: Option<String>,
 }
 
-impl EchoNode {
+impl Node {
     pub fn step(&mut self, input: Message, output: &mut StdoutLock) -> anyhow::Result<()> {
         match input.body.payload {
-            Payload::Init { .. } => {
+            Payload::Init { node_id, .. } => {
+                self.node_id = Some(node_id);
                 let reply = Message {
                     src: input.dst,
                     dst: input.src,
@@ -81,7 +83,8 @@ impl EchoNode {
             }
             Payload::EchoOk { .. } => {}
             Payload::Generate => {
-                let guid = format!("{}", self.id);
+                let node_id = self.node_id.as_ref().unwrap();
+                let guid = format!("{}-{}", node_id, self.id);
                 let reply = Message {
                     src: input.dst,
                     dst: input.src,
@@ -107,7 +110,10 @@ fn main() -> anyhow::Result<()> {
 
     let mut stdout = std::io::stdout().lock();
 
-    let mut state = EchoNode { id: 0 };
+    let mut state = Node {
+        id: 0,
+        node_id: None,
+    };
 
     for input in inputs {
         let input = input.context("Could not read STDIN from maelstrom")?;
