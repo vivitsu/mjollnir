@@ -16,11 +16,19 @@ struct EchoNode {
 }
 
 impl Node<(), Payload> for EchoNode {
-    fn from_init(_state: (), _init: Init) -> anyhow::Result<Self> {
+    fn from_init(
+        _state: (),
+        _init: Init,
+        _tx: std::sync::mpsc::Sender<Event<Payload>>,
+    ) -> anyhow::Result<Self> {
         Ok(Self { id: 1 })
     }
 
-    fn step(&mut self, input: Message<Payload>, output: &mut StdoutLock) -> anyhow::Result<()> {
+    fn step(&mut self, input: Event<Payload>, output: &mut StdoutLock) -> anyhow::Result<()> {
+        let Event::Message(input) = input else {
+            panic!("Got signal when we weren't expecting one");
+        };
+
         let mut reply = input.into_reply(Some(&mut self.id));
         match reply.body.payload {
             Payload::Echo { echo } => {
@@ -34,5 +42,5 @@ impl Node<(), Payload> for EchoNode {
 }
 
 fn main() -> anyhow::Result<()> {
-    run::<_, EchoNode, _>(())
+    run::<_, EchoNode, _, _>(())
 }
