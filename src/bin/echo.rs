@@ -1,8 +1,7 @@
 use mjollnir::*;
 
-use anyhow::Context;
 use serde::{Deserialize, Serialize};
-use std::io::{StdoutLock, Write};
+use std::io::StdoutLock;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -26,8 +25,7 @@ impl Node<(), Payload> for EchoNode {
         match reply.body.payload {
             Payload::Echo { echo } => {
                 reply.body.payload = Payload::EchoOk { echo };
-                serde_json::to_writer(&mut *output, &reply).context("respond to init")?;
-                output.write_all(b"\n").context("write trailing newline")?;
+                reply.send(output)?;
             }
             Payload::EchoOk { .. } => {}
         }

@@ -1,11 +1,7 @@
 use mjollnir::*;
 
-use anyhow::Context;
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    io::{StdoutLock, Write},
-};
+use std::{collections::HashMap, io::StdoutLock};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -48,24 +44,18 @@ impl Node<(), Payload> for BroadcastNode {
             Payload::Broadcast { message } => {
                 self.messages.push(message);
                 reply.body.payload = Payload::BroadcastOk;
-                serde_json::to_writer(&mut *output, &reply)
-                    .context("serialize response to generate")?;
-                output.write_all(b"\n").context("write trailing newline")?;
+                reply.send(output)?;
             }
             Payload::Read => {
                 reply.body.payload = Payload::ReadOk {
                     messages: self.messages.clone(),
                 };
-                serde_json::to_writer(&mut *output, &reply)
-                    .context("serialize response to generate")?;
-                output.write_all(b"\n").context("write trailing newline")?;
+                reply.send(output)?;
             }
             Payload::Topology { topology } => {
                 self.topology = topology;
                 reply.body.payload = Payload::TopologyOk;
-                serde_json::to_writer(&mut *output, &reply)
-                    .context("serialize response to generate")?;
-                output.write_all(b"\n").context("write trailing newline")?;
+                reply.send(output)?;
             }
             Payload::BroadcastOk | Payload::ReadOk { .. } | Payload::TopologyOk => {}
         }
