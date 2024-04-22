@@ -1,6 +1,7 @@
 use mjollnir::*;
 
 use anyhow::Context;
+use rand::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
@@ -25,7 +26,7 @@ enum Payload {
     },
     TopologyOk,
     Gossip {
-        seen: Vec<usize>,
+        seen: HashSet<usize>,
     },
 }
 
@@ -80,20 +81,26 @@ impl Node<(), Payload, SignalPayload> for BroadcastNode {
                 SignalPayload::Gossip => {
                     for n in &self.neighborhood {
                         let known_to_n = &self.known[n];
+                        let (already_known, mut notify_of): (HashSet<_>, HashSet<_>) = self
+                            .messages
+                            .iter()
+                            .copied()
+                            .partition(|m| known_to_n.contains(m));
+                        let mut rng = rand::thread_rng();
+                        let additional_cap = (10 * already_known.len() / 100) as u32;
+                        notify_of.extend(already_known.iter().filter(|_| {
+                            rng.gen_ratio(
+                                additional_cap.min(already_known.len() as u32),
+                                already_known.len() as u32,
+                            )
+                        }));
                         Message {
                             src: self.node.clone(),
                             dst: n.clone(),
                             body: Body {
                                 id: None,
                                 in_reply_to: None,
-                                payload: Payload::Gossip {
-                                    seen: self
-                                        .messages
-                                        .iter()
-                                        .copied()
-                                        .filter(|m| !known_to_n.contains(m))
-                                        .collect(),
-                                },
+                                payload: Payload::Gossip { seen: notify_of },
                             },
                         }
                         .send(&mut *output)
