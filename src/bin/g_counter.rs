@@ -3,49 +3,38 @@ use mjollnir::*;
 use anyhow::Context;
 use rand::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    io::{StdoutLock, Write},
-    time::Duration,
-};
+use std::{collections::VecDeque, io::StdoutLock, time::Duration};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
 enum Payload {
-    Add { delta: usize },
+    Add {
+        delta: usize,
+    },
     AddOk,
     Read,
-    ReadOk { value: usize },
-    CounterInit,
-    CounterUpdate { delta: usize },
-}
-
-enum SignalPayload {
+    ReadOk {
+        value: usize,
+    },
     CounterInit,
     CounterUpdate,
-}
-
-const SEQ_KV_NODE: &'static str = "seq-kv";
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
-#[serde(rename_all = "snake_case")]
-enum SeqKvPayload<T> {
-    Read {
+    #[serde(rename = "read")]
+    SeqKvRead {
         key: String,
     },
-    ReadOk {
-        value: T,
+    #[serde(rename = "read_ok")]
+    SeqKvReadOk {
+        value: usize,
     },
     Write {
         key: String,
-        value: T,
+        value: usize,
     },
     Cas {
         key: String,
-        from: T,
-        to: T,
+        from: usize,
+        to: usize,
         #[serde(
             default,
             rename = "create_if_not_exists",
@@ -56,34 +45,17 @@ enum SeqKvPayload<T> {
     CasOk {},
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct SeqKvMessage<SeqKvPayload> {
-    src: String,
-    #[serde(rename = "dest")]
-    dst: String,
-    body: SeqKvBody<SeqKvPayload>,
+enum SignalPayload {
+    CounterInit,
+    CounterUpdate,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct SeqKvBody<SeqKvPayload> {
-    payload: SeqKvPayload,
-}
-
-impl<SeqKvPayload> SeqKvMessage<SeqKvPayload> {
-    pub fn send(&self, output: &mut impl Write) -> anyhow::Result<()>
-    where
-        SeqKvPayload: Serialize,
-    {
-        serde_json::to_writer(&mut *output, self).context("serialize response to generate")?;
-        output.write_all(b"\n").context("write trailing newline")?;
-
-        Ok(())
-    }
-}
+const SEQ_KV_NODE: &'static str = "seq-kv";
 
 struct CounterNode {
     node_id: String,
     deltas: VecDeque<usize>,
+    id: usize,
 }
 
 impl Node<(), Payload, SignalPayload> for CounterNode {
@@ -98,6 +70,7 @@ impl Node<(), Payload, SignalPayload> for CounterNode {
         let node = Self {
             node_id: init.node_id,
             deltas: VecDeque::new(),
+            id: 1,
         };
 
         tx.send(Event::Signal(SignalPayload::CounterInit))?;
@@ -123,21 +96,24 @@ impl Node<(), Payload, SignalPayload> for CounterNode {
             Event::EOF => {}
             Event::Signal(payload) => match payload {
                 SignalPayload::CounterInit => {
-                    let counter_init = SeqKvPayload::Cas {
+                    let counter_init = Payload::Cas {
                         key: "counter".to_string(),
                         from: 0,
                         to: 0,
                         create: true,
                     };
-                    SeqKvMessage {
+                    Message {
                         src: self.node_id.clone(),
                         dst: SEQ_KV_NODE.to_string(),
-                        body: SeqKvBody {
+                        body: Body {
                             payload: counter_init,
+                            id: Some(self.id),
+                            in_reply_to: None,
                         },
                     }
                     .send(&mut *output)
                     .context("initalize counter")?;
+                    self.id += 1;
                 }
                 SignalPayload::CounterUpdate => {}
             },
