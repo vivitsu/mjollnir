@@ -1,11 +1,8 @@
 use anyhow::Context;
-use std::{
-    collections::HashMap,
-    io::{BufRead, Write},
-};
+use std::io::{BufRead, Write};
 
 use crate::{
-    message::{Message, MessageBody, MessageType},
+    message::{Message, MessageBody, MessagePayload},
     message_id::MessageId,
 };
 
@@ -45,42 +42,38 @@ impl Node {
     }
 
     fn handle(&mut self, req: Message) -> anyhow::Result<Option<Message>> {
-        match req.body.msg_type {
-            MessageType::Init => {
+        match req.body.payload {
+            MessagePayload::Init {
+                node_id: nid,
+                node_ids: nids,
+            } => {
                 let msg_id = req.body.msg_id.unwrap();
-                self.node_id = req.body.payload["node_id"].as_str().unwrap().to_string();
+                self.node_id = nid;
                 eprintln!("My node_id is {}", self.node_id);
-                let mut node_ids = vec![];
-                for nid in req.body.payload["node_ids"].as_array().unwrap() {
-                    node_ids.push(nid.as_str().unwrap().to_string());
-                }
-                self.node_ids = node_ids;
+                self.node_ids = nids;
                 eprintln!("Other node_ids in the cluster are: {:?}", self.node_ids);
                 self.msg_id.inc();
                 let resp = Message {
                     src: self.node_id.clone(),
                     dest: req.src,
                     body: MessageBody {
-                        msg_type: MessageType::InitOk,
                         msg_id: Some(self.msg_id.into()),
                         in_reply_to: Some(msg_id),
-                        payload: HashMap::new(),
+                        payload: MessagePayload::InitOk,
                     },
                 };
                 Ok(Some(resp))
             }
-            MessageType::InitOk => Ok(None),
-            MessageType::Echo => {
+            MessagePayload::InitOk => Ok(None),
+            MessagePayload::Echo { echo: echo_str } => {
                 let msg_id = req.body.msg_id.unwrap();
-                let echo = req.body.payload["echo"].as_str().unwrap().to_string();
-                let mut payload = HashMap::new();
-                payload.insert("echo".to_string(), serde_json::to_value(echo).unwrap());
+                let echo = echo_str;
+                let payload = MessagePayload::EchoOk { echo };
                 self.msg_id.inc();
                 let resp = Message {
                     src: self.node_id.clone(),
                     dest: req.src,
                     body: MessageBody {
-                        msg_type: MessageType::EchoOk,
                         msg_id: Some(self.msg_id.into()),
                         in_reply_to: Some(msg_id),
                         payload,
@@ -88,7 +81,7 @@ impl Node {
                 };
                 Ok(Some(resp))
             }
-            MessageType::EchoOk => Ok(None),
+            MessagePayload::EchoOk { echo: _ } => Ok(None),
         }
     }
 }

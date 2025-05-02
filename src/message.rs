@@ -1,25 +1,28 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
-pub enum MessageType {
-    Init,
+pub enum MessagePayload {
+    Init {
+        node_id: String,
+        node_ids: Vec<String>,
+    },
     InitOk,
-    Echo,
-    EchoOk,
+    Echo {
+        echo: String,
+    },
+    EchoOk {
+        echo: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MessageBody {
-    #[serde(rename = "type")]
-    pub msg_type: MessageType,
     pub msg_id: Option<usize>,
     pub in_reply_to: Option<usize>,
     #[serde(flatten)]
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
-    pub payload: HashMap<String, Value>,
+    pub payload: MessagePayload,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
