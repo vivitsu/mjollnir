@@ -1,6 +1,8 @@
+use derive_more::Display;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Display, Copy, Clone, Serialize, Deserialize)]
+#[display("{}", self.0)]
 pub struct MessageId(usize);
 
 impl MessageId {

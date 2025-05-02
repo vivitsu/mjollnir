@@ -1,5 +1,8 @@
 use anyhow::Context;
-use std::io::{BufRead, Write};
+use std::{
+    io::{BufRead, Write},
+    time::SystemTime,
+};
 
 use crate::{
     message::{Message, MessageBody, MessagePayload},
@@ -82,6 +85,25 @@ impl Node {
                 Ok(Some(resp))
             }
             MessagePayload::EchoOk { echo: _ } => Ok(None),
+            MessagePayload::Generate => {
+                let msg_id = req.body.msg_id.unwrap();
+                let now = SystemTime::now();
+                let duration = now.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+                self.msg_id.inc();
+                let id = format!("{}-{}-{}", duration, self.node_id, self.msg_id);
+                let payload = MessagePayload::GenerateOk { id };
+                let resp = Message {
+                    src: self.node_id.clone(),
+                    dest: req.src,
+                    body: MessageBody {
+                        msg_id: Some(self.msg_id.into()),
+                        in_reply_to: Some(msg_id),
+                        payload,
+                    },
+                };
+                Ok(Some(resp))
+            }
+            MessagePayload::GenerateOk { id: _ } => Ok(None),
         }
     }
 }
