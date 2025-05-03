@@ -1,24 +1,21 @@
 use serde::{Deserialize, Serialize};
 
+use crate::{
+    echo::{EchoOkPayload, EchoPayload},
+    init::InitPayload,
+    unique_id::{GenerateOkPayload, GeneratePayload},
+};
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
 pub enum MessagePayload {
-    Init {
-        node_id: String,
-        node_ids: Vec<String>,
-    },
+    Init(InitPayload),
     InitOk,
-    Echo {
-        echo: String,
-    },
-    EchoOk {
-        echo: String,
-    },
-    Generate,
-    GenerateOk {
-        id: String,
-    },
+    Echo(EchoPayload),
+    EchoOk(EchoOkPayload),
+    Generate(GeneratePayload),
+    GenerateOk(GenerateOkPayload),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

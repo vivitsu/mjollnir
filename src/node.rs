@@ -1,11 +1,9 @@
 use anyhow::Context;
-use std::{
-    io::{BufRead, Write},
-    time::SystemTime,
-};
+use std::io::{BufRead, Write};
 
 use crate::{
-    message::{Message, MessageBody, MessagePayload},
+    handle::Handle,
+    message::{Message, MessagePayload},
     message_id::MessageId,
 };
 
@@ -27,12 +25,28 @@ impl Node {
         }
     }
 
+    pub fn id(&self) -> String {
+        self.node_id.clone()
+    }
+
+    pub fn set_id(&mut self, id: String) {
+        self.node_id = id;
+    }
+
+    pub fn set_node_ids(&mut self, ids: Vec<String>) {
+        self.node_ids = ids;
+    }
+
+    pub fn msg_id(&self) -> MessageId {
+        self.msg_id
+    }
+
     pub fn run<R: BufRead, W: Write>(&mut self, reader: R, mut writer: W) -> anyhow::Result<()> {
         eprintln!("Starting node...");
         for line in reader.lines() {
             let line = line.context("Input from reader could not be read")?;
             let req: Message = serde_json::from_str(&line)?;
-            let resp = self.handle(req)?;
+            let resp = self.handle(&req)?;
             match resp {
                 Some(resp) => {
                     serde_json::to_writer(&mut writer, &resp).context("serialize response")?;
@@ -44,66 +58,23 @@ impl Node {
         Ok(())
     }
 
-    fn handle(&mut self, req: Message) -> anyhow::Result<Option<Message>> {
-        match req.body.payload {
-            MessagePayload::Init {
-                node_id: nid,
-                node_ids: nids,
-            } => {
-                let msg_id = req.body.msg_id.unwrap();
-                self.node_id = nid;
-                eprintln!("My node_id is {}", self.node_id);
-                self.node_ids = nids;
-                eprintln!("Other node_ids in the cluster are: {:?}", self.node_ids);
-                self.msg_id.inc();
-                let resp = Message {
-                    src: self.node_id.clone(),
-                    dest: req.src,
-                    body: MessageBody {
-                        msg_id: Some(self.msg_id.into()),
-                        in_reply_to: Some(msg_id),
-                        payload: MessagePayload::InitOk,
-                    },
-                };
-                Ok(Some(resp))
+    fn handle(&mut self, req: &Message) -> anyhow::Result<Option<Message>> {
+        match &req.body.payload {
+            MessagePayload::Init(payload) => {
+                let resp = payload.handle(self, &req);
+                Ok(resp)
             }
             MessagePayload::InitOk => Ok(None),
-            MessagePayload::Echo { echo: echo_str } => {
-                let msg_id = req.body.msg_id.unwrap();
-                let echo = echo_str;
-                let payload = MessagePayload::EchoOk { echo };
-                self.msg_id.inc();
-                let resp = Message {
-                    src: self.node_id.clone(),
-                    dest: req.src,
-                    body: MessageBody {
-                        msg_id: Some(self.msg_id.into()),
-                        in_reply_to: Some(msg_id),
-                        payload,
-                    },
-                };
-                Ok(Some(resp))
+            MessagePayload::Echo(payload) => {
+                let resp = payload.handle(self, &req);
+                Ok(resp)
             }
-            MessagePayload::EchoOk { echo: _ } => Ok(None),
-            MessagePayload::Generate => {
-                let msg_id = req.body.msg_id.unwrap();
-                let now = SystemTime::now();
-                let duration = now.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-                self.msg_id.inc();
-                let id = format!("{}-{}-{}", duration, self.node_id, self.msg_id);
-                let payload = MessagePayload::GenerateOk { id };
-                let resp = Message {
-                    src: self.node_id.clone(),
-                    dest: req.src,
-                    body: MessageBody {
-                        msg_id: Some(self.msg_id.into()),
-                        in_reply_to: Some(msg_id),
-                        payload,
-                    },
-                };
-                Ok(Some(resp))
+            MessagePayload::EchoOk(_) => Ok(None),
+            MessagePayload::Generate(payload) => {
+                let resp = payload.handle(self, &req);
+                Ok(resp)
             }
-            MessagePayload::GenerateOk { id: _ } => Ok(None),
+            MessagePayload::GenerateOk(_) => Ok(None),
         }
     }
 }
