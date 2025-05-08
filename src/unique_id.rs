@@ -17,11 +17,10 @@ pub struct GenerateOkPayload {
 pub struct GeneratePayload;
 
 impl Handle for GeneratePayload {
-    fn handle(&self, node: &mut Node, req: &Message) -> Option<Message> {
+    fn handle(&self, node: &Node, req: &Message) -> Option<Message> {
         let msg_id = req.body.msg_id.unwrap();
         let now = SystemTime::now();
         let duration = now.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-        node.msg_id().inc();
         let id = format!("{}-{}-{}", duration, node.id(), msg_id);
         let payload = MessagePayload::GenerateOk(GenerateOkPayload { id });
         let resp = Message {

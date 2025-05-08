@@ -17,11 +17,10 @@ pub struct EchoPayload {
 }
 
 impl Handle for EchoPayload {
-    fn handle(&self, node: &mut Node, req: &Message) -> Option<Message> {
+    fn handle(&self, node: &Node, req: &Message) -> Option<Message> {
         let msg_id = req.body.msg_id.unwrap();
         let echo = self.echo.clone();
         let payload = MessagePayload::EchoOk(EchoOkPayload { echo });
-        node.msg_id().inc();
         let resp = Message {
             src: node.id(),
             dest: req.src.clone(),

@@ -9,32 +9,24 @@ use crate::{
 
 pub struct Node {
     msg_id: MessageId,
-    node_id: String,
+    id: String,
     node_ids: Vec<String>,
 }
 
 impl Node {
     pub fn new() -> Self {
-        let node_id = String::new();
+        let id = String::new();
         let node_ids = Vec::new();
         let msg_id = MessageId::init();
         Self {
             msg_id,
-            node_id,
+            id,
             node_ids,
         }
     }
 
     pub fn id(&self) -> String {
-        self.node_id.clone()
-    }
-
-    pub fn set_id(&mut self, id: String) {
-        self.node_id = id;
-    }
-
-    pub fn set_node_ids(&mut self, ids: Vec<String>) {
-        self.node_ids = ids;
+        self.id.clone()
     }
 
     pub fn msg_id(&self) -> MessageId {
@@ -46,32 +38,39 @@ impl Node {
         for line in reader.lines() {
             let line = line.context("Input from reader could not be read")?;
             let req: Message = serde_json::from_str(&line)?;
-            let resp = self.handle(&req)?;
-            match resp {
-                Some(resp) => {
-                    serde_json::to_writer(&mut writer, &resp).context("serialize response")?;
-                    writer.write_all(b"\n").context("write newline")?;
-                }
-                _ => {}
+            let resp = self.process(&req)?;
+            if let Some(resp) = resp {
+                self.reply(&resp, &mut writer)?;
             }
         }
         Ok(())
     }
 
-    fn handle(&mut self, req: &Message) -> anyhow::Result<Option<Message>> {
+    fn reply<W: Write>(&self, resp: &Message, mut writer: &mut W) -> anyhow::Result<()> {
+        serde_json::to_writer(&mut writer, &resp).context("serialize response")?;
+        writer.write_all(b"\n").context("write newline")?;
+        Ok(())
+    }
+
+    fn process(&mut self, req: &Message) -> anyhow::Result<Option<Message>> {
         match &req.body.payload {
             MessagePayload::Init(payload) => {
-                let resp = payload.handle(self, &req);
+                self.id = payload.node_id.clone();
+                self.node_ids = payload.node_ids.clone();
+                self.msg_id.inc();
+                let resp = payload.handle(&self, &req);
                 Ok(resp)
             }
             MessagePayload::InitOk => Ok(None),
             MessagePayload::Echo(payload) => {
-                let resp = payload.handle(self, &req);
+                self.msg_id.inc();
+                let resp = payload.handle(&self, &req);
                 Ok(resp)
             }
             MessagePayload::EchoOk(_) => Ok(None),
             MessagePayload::Generate(payload) => {
-                let resp = payload.handle(self, &req);
+                self.msg_id.inc();
+                let resp = payload.handle(&self, &req);
                 Ok(resp)
             }
             MessagePayload::GenerateOk(_) => Ok(None),
