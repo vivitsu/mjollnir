@@ -1,6 +1,6 @@
 use std::sync::{atomic::{AtomicUsize, Ordering}, Arc};
 
-use crate::{blocking_queue::BlockingQueue, task::Task};
+use crate::{blocking_queue::BlockingQueue, join_handle::{JoinHandle, Shared}, task::Task};
 
 pub struct Executor {
     queue: BlockingQueue<Arc<Task>>,
@@ -21,12 +21,25 @@ impl Executor {
         }
     }
     
-    pub fn spawn<F>(&self, future: F)
+    pub fn spawn<F, T>(&self, future: F) -> JoinHandle<T>
     where
-        F: Future<Output = ()> + 'static
+        F: Future<Output = T> + 'static,
+        T: Send + 'static,
     {
+        let shared = Shared::new();
+        let shared_clone = shared.clone();
+        
+        let wrapper = async move {
+            let out = future.await;
+            shared_clone.complete(out);
+        };
+ 
+        Task::spawn(wrapper, &self.queue);
         self.active.fetch_add(1, Ordering::SeqCst);
-        Task::spawn(future, &self.queue)
+        
+        JoinHandle {
+            shared
+        }
     }
     
     pub fn run(&self) {
