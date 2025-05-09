@@ -1,9 +1,8 @@
 mod queue;
-mod blocking_queue;
 mod task;
 
-pub mod join_handle;
 pub mod executor;
+pub mod join_handle;
 
 use std::{cell::RefCell, sync::Arc};
 
@@ -21,9 +20,11 @@ where
     T: Send + 'static,
 {
     CURRENT_RUNTIME.with(|slot| {
-       let opt = slot.borrow();
-       let executor = opt.as_ref().expect("No runtime installed - did you forget #[kala::main]?");
-       
-       executor.spawn(future)
-   }) 
+        let opt = slot.borrow();
+        let executor = opt
+            .as_ref()
+            .expect("No runtime installed - did you forget #[kala::main]?");
+
+        executor.spawn(future)
+    })
 }

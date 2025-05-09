@@ -8,6 +8,11 @@
       "binary": {
         "path": "/Users/vbm/.rustup/toolchains/nightly-aarch64-apple-darwin/bin/rust-analyzer",
         "args": []
+      },
+      "initalization_options" : {
+        "rustfmt" : {
+          "extraArgs" : ["+nightly"]
+        }
       }
     }
   }

@@ -1,4 +1,8 @@
-use std::{pin::Pin, sync::{Arc, Mutex}, task::{Context, Poll, Waker}};
+use std::{
+    pin::Pin,
+    sync::{Arc, Mutex},
+    task::{Context, Poll, Waker},
+};
 
 pub(crate) struct Shared<T> {
     result: Mutex<Option<T>>,
@@ -12,14 +16,14 @@ impl<T> Shared<T> {
             waker: Mutex::new(None),
         })
     }
-    
+
     pub(crate) fn complete(&self, val: T) {
         *self.result.lock().unwrap() = Some(val);
         if let Some(w) = self.waker.lock().unwrap().take() {
             w.wake();
         }
     }
-    
+
     pub(crate) fn take_result(&self) -> T {
         self.result.lock().unwrap().take().unwrap()
     }
