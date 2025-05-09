@@ -19,6 +19,10 @@ impl<T> Shared<T> {
             w.wake();
         }
     }
+    
+    pub(crate) fn take_result(&self) -> T {
+        self.result.lock().unwrap().take().unwrap()
+    }
 }
 
 pub struct JoinHandle<T> {

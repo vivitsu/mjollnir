@@ -6,12 +6,8 @@ async fn add(x: u32, y: u32) -> u32 {
 
 fn main() {
     let runtime = Executor::new();
-    let handle = runtime.spawn(add(3, 4));
-    
-    runtime.spawn(async {
-        let sum = handle.await;
-        println!("3 + 4 = {}", sum);
+    runtime.block_on(async {
+        let sum = add(3, 4).await;
+        println!("3+4={}", sum);
     });
-    
-    runtime.run();
 }

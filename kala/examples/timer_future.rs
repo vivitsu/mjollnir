@@ -1,4 +1,4 @@
-use std::{pin::Pin, task::{Context, Poll}, thread, time::{Duration, Instant}};
+use std::{pin::Pin, sync::Arc, task::{Context, Poll}, thread, time::{Duration, Instant}};
 
 use kala::executor::Executor;
 
@@ -52,22 +52,21 @@ fn sleep(duration: Duration) -> Timer {
 }
 
 fn main() {
-    let runtime = Executor::new();
-    
-    runtime.spawn(async {
-        println!("starting timer 1");
-        sleep(Duration::from_millis(1000)).await;
-        println!("timer 1 done!")
-    });
-    
-    runtime.spawn(async {
-        println!("starting timer 2");
-        sleep(Duration::from_millis(1000)).await;
-        println!("timer 2 done!")
-    });
-    
+    let runtime = Arc::new(Executor::new());
     let now = Instant::now();
-    runtime.run();
-    
+    let rt = runtime.clone();
+    runtime.block_on(async move {
+        rt.spawn(async {
+            println!("starting timer 1");
+            sleep(Duration::from_millis(1000)).await;
+            println!("timer 1 done!")
+        });
+        
+        rt.spawn(async {
+            println!("starting timer 2");
+            sleep(Duration::from_millis(1000)).await;
+            println!("timer 2 done!")
+        });
+    });
     println!("Ran both timers for 1 second each, but total runtime was {}ms", now.elapsed().as_millis());
 }

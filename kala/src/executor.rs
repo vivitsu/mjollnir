@@ -21,6 +21,27 @@ impl Executor {
         }
     }
     
+    pub fn block_on<F, T>(&self, future: F) -> T 
+    where
+        F: Future<Output = T> + 'static,
+        T: Send + 'static,
+    {
+        let shared = Shared::new();
+        let shared_clone = shared.clone();
+        
+        let wrapper = async move {
+            let out = future.await;
+            shared_clone.complete(out);
+        };
+        
+        self.spawn_task(wrapper);
+        
+        // Drive all tasks to completion
+        self.run();
+    
+        shared.take_result()
+    }
+    
     pub fn spawn<F, T>(&self, future: F) -> JoinHandle<T>
     where
         F: Future<Output = T> + 'static,
@@ -33,10 +54,9 @@ impl Executor {
             let out = future.await;
             shared_clone.complete(out);
         };
- 
-        Task::spawn(wrapper, &self.queue);
-        self.active.fetch_add(1, Ordering::SeqCst);
-        
+
+        self.spawn_task(wrapper);
+    
         JoinHandle {
             shared
         }
@@ -51,5 +71,13 @@ impl Executor {
                 self.queue.notify_one();
             }
         }
+    }
+
+    fn spawn_task<F>(&self, future: F)
+    where
+        F: Future<Output = ()> + 'static,
+    {
+        Task::spawn(future, &self.queue);
+        self.active.fetch_add(1, Ordering::SeqCst);
     }
 }
