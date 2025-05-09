@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "mjollnir",
-    "kala",
+    "kala", 
+    "kala-macros",
 ]
 resolver = "3"

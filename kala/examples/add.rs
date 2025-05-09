@@ -1,13 +1,11 @@
-use kala::executor::Executor;
+use std::sync::Arc;
 
 async fn add(x: u32, y: u32) -> u32 {
     x + y
 }
 
-fn main() {
-    let runtime = Executor::new();
-    runtime.block_on(async {
-        let sum = add(3, 4).await;
-        println!("3+4={}", sum);
-    });
+#[kala::main]
+async fn main() {
+    let sum = add(3, 4).await;
+    println!("3+4={}", sum);
 }
