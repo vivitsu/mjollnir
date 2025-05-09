@@ -58,19 +58,19 @@ impl Node {
                 self.id = payload.node_id.clone();
                 self.node_ids = payload.node_ids.clone();
                 self.msg_id.inc();
-                let resp = payload.handle(&self, &req);
+                let resp = payload.handle(self, req);
                 Ok(resp)
             }
             MessagePayload::InitOk => Ok(None),
             MessagePayload::Echo(payload) => {
                 self.msg_id.inc();
-                let resp = payload.handle(&self, &req);
+                let resp = payload.handle(self, req);
                 Ok(resp)
             }
             MessagePayload::EchoOk(_) => Ok(None),
             MessagePayload::Generate(payload) => {
                 self.msg_id.inc();
-                let resp = payload.handle(&self, &req);
+                let resp = payload.handle(self, req);
                 Ok(resp)
             }
             MessagePayload::GenerateOk(_) => Ok(None),

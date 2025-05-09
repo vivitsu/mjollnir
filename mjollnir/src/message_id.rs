@@ -7,17 +7,17 @@ pub struct MessageId(usize);
 
 impl MessageId {
     pub fn init() -> Self {
-        Self { 0: 0 }
+        Self(0)
     }
 
     pub fn inc(&mut self) {
-        self.0 = self.0 + 1;
+        self.0 += 1;
     }
 }
 
 impl From<usize> for MessageId {
     fn from(msg_id: usize) -> Self {
-        MessageId { 0: msg_id }
+        MessageId(msg_id)
     }
 }
 
