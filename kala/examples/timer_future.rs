@@ -1,10 +1,8 @@
 use std::{
-    pin::Pin,
-    sync::Arc,
-    task::{Context, Poll},
-    thread,
-    time::{Duration, Instant},
+    pin::Pin, task::{Context, Poll}, thread, time::{Duration, Instant}
 };
+
+use kala::executor::Executor;
 
 struct Timer {
     deadline: Instant,
@@ -55,23 +53,25 @@ fn sleep(duration: Duration) -> Timer {
     Timer::new(duration)
 }
 
-#[kala::main]
-async fn main() {
-    let now = Instant::now();
-    let t1 = kala::spawn(async {
+fn main() {
+    let mut runtime = Executor::new().expect("runtime");
+    let t1 = runtime.spawn(async {
         println!("starting timer 1");
         sleep(Duration::from_millis(1000)).await;
         println!("timer 1 done!");
     });
-
-    let t2 = kala::spawn(async {
+    
+    let t2 = runtime.spawn(async {
         println!("starting timer 2");
         sleep(Duration::from_millis(1000)).await;
         println!("timer 2 done!");
     });
 
-    t1.await;
-    t2.await;
+    let now = Instant::now();
+    runtime.block_on(async move {
+        t1.await;
+        t2.await;
+    });
 
     println!(
         "Ran both timers for 1 second each, but total runtime was {}ms",

@@ -1,25 +1,31 @@
-use std::{
-    cell::RefCell,
-    sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    },
-};
+use std::{cell::RefCell, sync::{
+    atomic::{AtomicUsize, Ordering}, Arc
+}};
 
 use crate::{
-    join_handle::{JoinHandle, Shared},
-    queue::ConcurrentQueue,
-    task::Task,
+    join_handle::{JoinHandle, Shared}, queue::ConcurrentQueue, reactor::Reactor, task::Task
 };
 
-use mio::{Events, Poll as MioPoll, Token, Waker as MioWaker};
+thread_local! {
+    static CURRENT_EXECUTOR: RefCell<Option<Arc<Executor>>> = const { RefCell::new(None) };
+}
 
-const WAKER_TOKEN: Token = Token(usize::MAX);
+pub fn enter_runtime_scope<F, R>(executor: Arc<Executor>, f: F) -> R
+where
+    F: FnOnce() -> R,
+{
+    CURRENT_EXECUTOR.with(|cell| {
+        let mut opt_exec = cell.borrow_mut();
+        let old_exec = opt_exec.take();
+        *opt_exec = Some(executor);
+        let result = f();
+        *opt_exec = old_exec;
+        result
+    })
+}
 
 pub struct Executor {
-    poll: RefCell<MioPoll>,
-    events: RefCell<Events>,
-    waker: Arc<MioWaker>,
+    reactor: Reactor,
     queue: ConcurrentQueue<Arc<Task>>,
     active: AtomicUsize,
 }
@@ -32,20 +38,16 @@ impl Default for Executor {
 
 impl Executor {
     pub fn new() -> std::io::Result<Self> {
-        let poll = RefCell::new(MioPoll::new()?);
-        let events = RefCell::new(Events::with_capacity(1024));
         let queue = ConcurrentQueue::new();
-        let waker = Arc::new(MioWaker::new(poll.borrow().registry(), WAKER_TOKEN)?);
+        let reactor = Reactor::new()?;
         Ok(Self {
-            poll,
-            events,
-            waker,
+            reactor,
             queue,
             active: AtomicUsize::new(0),
         })
     }
 
-    pub fn block_on<F, T>(self: Arc<Self>, future: F) -> T
+    pub fn block_on<F, T>(&mut self, future: F) -> T
     where
         F: Future<Output = T> + 'static,
         T: Send + 'static,
@@ -84,26 +86,13 @@ impl Executor {
         JoinHandle { shared }
     }
 
-    pub fn run(self: Arc<Self>) {
+    pub fn run(&mut self) {
         while self.active.load(Ordering::SeqCst) > 0 {
-            let mut poll = self.poll.borrow_mut();
-            let mut events = self.events.borrow_mut();
-            poll.poll(&mut events, None).unwrap();
-
-            for event in events.iter() {
-                match event.token() {
-                    WAKER_TOKEN => {
-                        while let Some(task) = self.queue.pop() {
-                            let done = task.poll();
-                            if done {
-                                self.active.fetch_sub(1, Ordering::SeqCst);
-                                self.waker.wake().unwrap();
-                            }
-                        }
-                    }
-                    _token => {
-                        todo!()
-                    }
+            self.reactor.run_blocking();
+            while let Some(task) = self.queue.pop() {
+                let done = task.poll();
+                if done {
+                    self.active.fetch_sub(1, Ordering::SeqCst);
                 }
             }
         }
@@ -113,7 +102,20 @@ impl Executor {
     where
         F: Future<Output = ()> + 'static,
     {
-        Task::spawn(future, self.waker.clone(), &self.queue);
+        Task::spawn(future, self.reactor.waker(), &self.queue);
         self.active.fetch_add(1, Ordering::SeqCst);
     }
+}
+
+pub fn spawn<F>(future: F) -> JoinHandle<F::Output>
+where
+    F: Future + 'static,
+    F::Output: Send + 'static,
+{
+    CURRENT_EXECUTOR.with(|cell| {
+        match cell.borrow().as_ref() {
+            Some(executor) => executor.spawn(future),
+            None => panic!("spawn called outside of a #[kala::main] runtime"),
+        }
+    })
 }

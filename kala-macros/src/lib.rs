@@ -26,14 +26,12 @@ pub fn main(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 Ok(runtime) => Arc::new(runtime),
                 Err(e) => panic!("Could not create runtime: {:?}", e),
             };
-
-            kala::CURRENT_RUNTIME.with(|slot| {
-                *slot.borrow_mut() = Some(runtime.clone());
+            
+            kala::executor::enter_runtime_scope(runtime.clone(), move || {
+                runtime.block_on(async move {
+                    #block
+                })
             });
-
-            runtime.block_on(async move {
-                #block
-            })
         }
     };
 

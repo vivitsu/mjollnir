@@ -14,13 +14,13 @@ type TaskPtr = *const ();
 pub(crate) struct Task {
     future: RefCell<Pin<Box<dyn Future<Output = ()> + 'static>>>,
     task_queue: ConcurrentQueue<Arc<Task>>,
-    reactor: Arc<MioWaker>,
+    reactor_waker: Arc<MioWaker>,
 }
 
 impl Task {
     pub(crate) fn schedule(self: &Arc<Self>) {
         self.task_queue.push(self.clone());
-        self.reactor.wake().unwrap();
+        self.reactor_waker.wake().unwrap();
     }
 
     pub(crate) fn poll(self: &Arc<Self>) -> bool {
@@ -38,22 +38,19 @@ impl Task {
         }
     }
 
-    pub(crate) fn spawn<F>(
-        future: F,
-        reactor: Arc<MioWaker>,
-        task_queue: &ConcurrentQueue<Arc<Task>>,
-    ) where
+    pub(crate) fn spawn<F>(future: F, reactor_waker: Arc<MioWaker>, task_queue: &ConcurrentQueue<Arc<Task>>)
+    where
         F: Future<Output = ()> + 'static,
     {
         #[allow(clippy::arc_with_non_send_sync)]
         let task = Arc::new(Task {
             future: RefCell::new(Box::pin(future)),
             task_queue: task_queue.clone(),
-            reactor: reactor.clone(),
+            reactor_waker: reactor_waker.clone(),
         });
 
         task_queue.push(task);
-        reactor.wake().unwrap();
+        reactor_waker.wake().unwrap();
     }
 }
 
