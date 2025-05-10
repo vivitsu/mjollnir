@@ -22,16 +22,11 @@ pub fn main(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let expanded = quote! {
         #(#attrs)*
         #vis fn main() {
-            let runtime = match kala::executor::Executor::new() {
-                Ok(runtime) => Arc::new(runtime),
-                Err(e) => panic!("Could not create runtime: {:?}", e),
-            };
-            
-            kala::executor::enter_runtime_scope(runtime.clone(), move || {
-                runtime.block_on(async move {
-                    #block
-                })
-            });
+            let mut runtime = kala::executor::Executor::new();
+
+            runtime.block_on(async move {
+                #block
+            })
         }
     };
 

@@ -5,7 +5,7 @@ async fn add(x: u32, y: u32) -> u32 {
 }
 
 fn main() {
-    let mut runtime = Executor::new().expect("runtime");
+    let mut runtime = Executor::new();
     runtime.block_on(async move {
         let sum = add(3, 4).await;
         println!("3+4={}", sum);

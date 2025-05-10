@@ -38,8 +38,11 @@ impl Task {
         }
     }
 
-    pub(crate) fn spawn<F>(future: F, reactor_waker: Arc<MioWaker>, task_queue: &ConcurrentQueue<Arc<Task>>)
-    where
+    pub(crate) fn spawn<F>(
+        future: F,
+        reactor_waker: Arc<MioWaker>,
+        task_queue: &ConcurrentQueue<Arc<Task>>,
+    ) where
         F: Future<Output = ()> + 'static,
     {
         #[allow(clippy::arc_with_non_send_sync)]
