@@ -1,14 +1,24 @@
 use std::cell::RefCell;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
+use std::os::fd::RawFd;
 use std::task::Waker;
 use std::time::{Duration, Instant};
 use std::{io::Result, sync::Arc};
 
-use mio::{Events, Poll as MioPoll, Token, Waker as MioWaker};
+use mio::{Events, Interest, Poll as MioPoll, Token, Waker as MioWaker};
 use slab::Slab;
 
 use crate::timer_entry::TimerEntry;
+
+fn slab_index(token: Token) -> usize {
+    token.0 - 1
+}
+
+struct IoSource {
+    waker: Option<Waker>,
+    interests: Interest,
+}
 
 const REACTOR_TOKEN: Token = Token(0);
 
@@ -21,7 +31,8 @@ pub(crate) struct Reactor {
     events: Events,
     waker: Arc<MioWaker>,
     timers: RefCell<BinaryHeap<Reverse<TimerEntry>>>,
-    _registrations: Slab<Waker>,
+    sources: RefCell<Slab<IoSource>>,
+    next_token: RefCell<usize>,
 }
 
 impl Reactor {
@@ -30,14 +41,26 @@ impl Reactor {
         let events = Events::with_capacity(1024);
         let waker = Arc::new(MioWaker::new(poll.registry(), REACTOR_TOKEN)?);
         let timers = RefCell::new(BinaryHeap::new());
-        let _registrations = Slab::new();
+        let sources = RefCell::new(Slab::with_capacity(1024));
+        let next_token = RefCell::new(0);
         Ok(Self {
             poll,
             events,
             waker,
             timers,
-            _registrations,
+            sources,
+            next_token,
         })
+    }
+
+    pub(crate) fn register_io(&self, fd: RawFd, interest: Interest) -> Token {
+        let mut sources = self.sources.borrow_mut();
+        let mut next_token = self.next_token.borrow_mut();
+
+        *next_token += 1;
+        let token = Token(*next_token);
+
+        token
     }
 
     pub(crate) fn register_timer(&self, timer: TimerEntry) {
