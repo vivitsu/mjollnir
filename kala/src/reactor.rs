@@ -6,6 +6,7 @@ use std::task::Waker;
 use std::time::{Duration, Instant};
 use std::{io::Result, sync::Arc};
 
+use mio::unix::SourceFd;
 use mio::{Events, Interest, Poll as MioPoll, Token, Waker as MioWaker};
 use slab::Slab;
 
@@ -32,7 +33,6 @@ pub(crate) struct Reactor {
     waker: Arc<MioWaker>,
     timers: RefCell<BinaryHeap<Reverse<TimerEntry>>>,
     sources: RefCell<Slab<IoSource>>,
-    next_token: RefCell<usize>,
 }
 
 impl Reactor {
@@ -42,25 +42,38 @@ impl Reactor {
         let waker = Arc::new(MioWaker::new(poll.registry(), REACTOR_TOKEN)?);
         let timers = RefCell::new(BinaryHeap::new());
         let sources = RefCell::new(Slab::with_capacity(1024));
-        let next_token = RefCell::new(0);
         Ok(Self {
             poll,
             events,
             waker,
             timers,
             sources,
-            next_token,
         })
     }
 
-    pub(crate) fn register_io(&self, fd: RawFd, interest: Interest) -> Token {
+    pub(crate) fn register_io(&self, fd: RawFd, interests: Interest) -> Result<Token> {
         let mut sources = self.sources.borrow_mut();
-        let mut next_token = self.next_token.borrow_mut();
+        let mut source = SourceFd(&fd);
+        let entry = sources.vacant_entry();
+        let slab_index = entry.key() + 1; // Token(0) is reserved for the reactor
+        let token = Token(slab_index);
+        self.poll
+            .registry()
+            .register(&mut source, token, interests)?;
 
-        *next_token += 1;
-        let token = Token(*next_token);
+        entry.insert(IoSource {
+            waker: None,
+            interests,
+        });
 
-        token
+        Ok(token)
+    }
+
+    pub(crate) fn register_io_waker(&self, token: Token, waker: Waker) {
+        let mut sources = self.sources.borrow_mut();
+        if let Some(source) = sources.get_mut(slab_index(token)) {
+            source.waker = Some(waker);
+        }
     }
 
     pub(crate) fn register_timer(&self, timer: TimerEntry) {
@@ -81,8 +94,14 @@ impl Reactor {
                 REACTOR_TOKEN => {
                     // Nothing to do. Pass control back to the runtime/executor
                 }
-                _token => {
-                    todo!()
+                token => {
+                    let slab_index = slab_index(token);
+                    let mut sources = self.sources.borrow_mut();
+                    if let Some(source) = sources.get_mut(slab_index) {
+                        if let Some(waker) = source.waker.take() {
+                            waker.wake()
+                        }
+                    }
                 }
             }
         }

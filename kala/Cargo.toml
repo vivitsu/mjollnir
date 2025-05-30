@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-mio = { version = "1.0.3", features = ["os-poll"] }
+mio = { version = "1.0.3", features = ["os-poll", "os-ext"] }
 kala-macros = { path = "../kala-macros" }
 slab = "0.4.9"
